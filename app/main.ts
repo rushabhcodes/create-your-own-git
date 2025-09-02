@@ -9,6 +9,7 @@ enum Commands {
     Init = "init",
     CatFile = "cat-file",
     HashObject = "hash-object",
+    LsTree = "ls-tree",
 }
 
 switch (command) {
@@ -75,6 +76,50 @@ switch (command) {
 
         console.log(hashHex);
 
+        break;
+
+    case Commands.LsTree:
+
+        const nameOnly = args.includes("--name-only");
+ 
+        const treeHash = args.find((a: string) => !a.startsWith("-"));
+        if (!treeHash) throw new Error("Missing tree hash argument");
+
+        const treeDir = treeHash.slice(0, 2);
+        const treeFile = treeHash.slice(2);
+        const treeObjectPath = `.git/objects/${treeDir}/${treeFile}`;
+
+        const treeCompressedData = fs.readFileSync(treeObjectPath);
+
+        const fullData = zlib.unzipSync(treeCompressedData);
+
+        const nullIdx = fullData.indexOf(0x00);
+
+        if (nullIdx === -1) throw new Error("Invalid tree object (no header terminator)");
+    
+        const body = fullData.slice(nullIdx + 1);
+
+        let offset = 0;
+
+        while (offset < body.length) {
+
+            const spaceIdx = body.indexOf(0x20, offset);
+            const nullIdx2 = body.indexOf(0x00, spaceIdx);
+            if (spaceIdx === -1 || nullIdx2 === -1) break;
+            let mode = body.slice(offset, spaceIdx).toString();
+            if (mode.length === 5) {
+                mode = '0' + mode;
+            }
+            const name = body.slice(spaceIdx + 1, nullIdx2).toString();
+            const shaBytes = body.slice(nullIdx2 + 1, nullIdx2 + 21); // 20 bytes
+            const sha = shaBytes.toString('hex');
+            if (nameOnly) {
+                console.log(name);
+            } else {
+                console.log(`${mode} ${sha}\t${name}`);
+            }
+            offset = nullIdx2 + 21;
+        }
         break;
 
     default:
