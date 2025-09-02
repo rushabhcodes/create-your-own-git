@@ -12,6 +12,7 @@ enum Commands {
     HashObject = "hash-object",
     LsTree = "ls-tree",
     WriteTree = "write-tree",
+    CommitTree = "commit-tree",
 }
 
 function splitHash(hash: string): { dir: string; file: string } {
@@ -48,7 +49,7 @@ function readObject(hash: string): GitObject {
     return { type, size, body };
 }
 
-function writeObject(type: 'blob' | 'tree', body: Buffer): string {
+function writeObject(type: 'blob' | 'tree' | 'commit', body: Buffer): string {
     const header = `${type} ${body.length}\x00`;
     const storeData = Buffer.concat([Buffer.from(header), body]);
     const hash = crypto.createHash('sha1').update(storeData).digest('hex');
@@ -169,6 +170,31 @@ switch (command) {
     case Commands.WriteTree: {
         const treeHash = buildTree('.');
         console.log(treeHash);
+        break;
+    }
+
+    case Commands.CommitTree: {
+        if (args.length < 2) throw new Error("Missing tree SHA");
+        const treeSha = args[1];
+        const pIdx = args.indexOf('-p');
+        const parentSha = pIdx !== -1 && pIdx + 1 < args.length ? args[pIdx + 1] : undefined;
+        const mIdx = args.indexOf('-m');
+        if (mIdx === -1 || mIdx + 1 >= args.length) throw new Error("Missing -m <message>");
+        const message = args[mIdx + 1];
+        const authorName = 'Coder';
+        const authorEmail = 'coder@example.com';
+        const timestamp = Math.floor(Date.now() / 1000);
+        const timezone = '+0000';
+        let lines = [`tree ${treeSha}`];
+        if (parentSha) lines.push(`parent ${parentSha}`);
+        const ident = `${authorName} <${authorEmail}> ${timestamp} ${timezone}`;
+        lines.push(`author ${ident}`);
+        lines.push(`committer ${ident}`);
+        lines.push(''); // blank line before message
+        lines.push(message);
+        const body = Buffer.from(lines.join('\n') + '\n');
+        const commitHash = writeObject('commit', body);
+        console.log(commitHash);
         break;
     }
 
