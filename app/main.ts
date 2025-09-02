@@ -12,6 +12,52 @@ enum Commands {
     LsTree = "ls-tree",
 }
 
+function splitHash(hash: string): { dir: string; file: string } {
+    return { dir: hash.slice(0, 2), file: hash.slice(2) };
+}
+
+function objectPath(hash: string): string {
+    const { dir, file } = splitHash(hash);
+    return `.git/objects/${dir}/${file}`;
+}
+
+interface GitObject {
+    type: string;
+    size: number;
+    body: Buffer;
+}
+
+function readRawObject(hash: string): Buffer {
+    return zlib.unzipSync(fs.readFileSync(objectPath(hash)));
+}
+
+function readObject(hash: string): GitObject {
+    const data = readRawObject(hash);
+    const nulIdx = data.indexOf(0x00);
+    if (nulIdx === -1) throw new Error("Corrupt object: missing header terminator");
+    const header = data.slice(0, nulIdx).toString(); // e.g. "blob 14"
+    const [type, sizeStr] = header.split(' ');
+    const size = parseInt(sizeStr, 10);
+    const body = data.slice(nulIdx + 1);
+    if (body.length !== size) {
+        // Not throwing hard (Git sometimes tolerates) but we'll enforce for consistency
+        throw new Error(`Size mismatch for ${hash}: expected ${size} got ${body.length}`);
+    }
+    return { type, size, body };
+}
+
+function writeObject(type: 'blob' | 'tree', body: Buffer): string {
+    const header = `${type} ${body.length}\x00`;
+    const storeData = Buffer.concat([Buffer.from(header), body]);
+    const hash = crypto.createHash('sha1').update(storeData).digest('hex');
+    const { dir, file } = splitHash(hash);
+    const dirPath = `.git/objects/${dir}`;
+    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+    const compressed = zlib.deflateSync(storeData);
+    fs.writeFileSync(`${dirPath}/${file}`, compressed);
+    return hash;
+}
+
 switch (command) {
     case Commands.Init:
         // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -31,24 +77,15 @@ switch (command) {
         if (pIndex === -1 || pIndex + 1 >= args.length) {
             throw new Error("Missing or invalid -p argument");
         }
-
-        const hash = args[pIndex + 1];
-        const dir = hash.slice(0, 2);
-        const file = hash.slice(2);
-
-        const objectPath = `.git/objects/${dir}/${file}`;
-
-        const compressedData = fs.readFileSync(objectPath);
-
-        const data = zlib.unzipSync(compressedData)
-
-        const new_data = data.slice(data.indexOf("\x00") + 1)
-
-        process.stdout.write(new_data.toString());
+    const hash = args[pIndex + 1];
+    const obj = readObject(hash);
+    // For cat-file -p we just print the body for now (blob or tree raw).
+    process.stdout.write(obj.body.toString());
 
         break;
 
     case Commands.HashObject:
+
         const wIndex = args.indexOf("-w");
         if (wIndex === -1 || wIndex + 1 >= args.length) {
             throw new Error("Missing or invalid -w argument");
@@ -56,24 +93,7 @@ switch (command) {
 
         const filePath = args[wIndex + 1];
         const fileData = fs.readFileSync(filePath);
-
-        const header = `blob ${fileData.length}\x00`;
-        const storeData = Buffer.concat([Buffer.from(header), fileData]);
-
-        const hashBuffer = crypto.createHash('sha1').update(storeData).digest();
-        const hashHex = hashBuffer.toString('hex');
-
-        const dirName = hashHex.slice(0, 2);
-        const fileName = hashHex.slice(2);
-
-        const objectDir = `.git/objects/${dirName}`;
-        if (!fs.existsSync(objectDir)) {
-            fs.mkdirSync(objectDir);
-        }
-
-        const compressedStoreData = zlib.deflateSync(storeData);
-        fs.writeFileSync(`${objectDir}/${fileName}`, compressedStoreData);
-
+        const hashHex = writeObject('blob', fileData);
         console.log(hashHex);
 
         break;
@@ -92,18 +112,8 @@ switch (command) {
             throw new Error("Missing tree hash argument");
         }
 
-        const treeDir = treeHash.slice(0, 2);
-        const treeFile = treeHash.slice(2);
-
-        const treeObjectPath = `.git/objects/${treeDir}/${treeFile}`;
-        
-        const treeCompressedData = fs.readFileSync(treeObjectPath);
-        const fullData = zlib.unzipSync(treeCompressedData);
-        const nullIdx = fullData.indexOf(0x00);
-        if (nullIdx === -1) {
-            throw new Error("Invalid tree object (no header terminator)");
-        }
-        const body = fullData.slice(nullIdx + 1); // binary body
+        const treeObj = readObject(treeHash);
+        const body = treeObj.body;
         let offset = 0;
         while (offset < body.length) {
             const spaceIdx = body.indexOf(0x20, offset); // ' '
