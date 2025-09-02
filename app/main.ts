@@ -3,7 +3,7 @@ import zlib from 'zlib';
 import crypto from 'crypto';
 
 const args = process.argv.slice(2);
-const command = args[1];
+const command = args[0];
 
 enum Commands {
     Init = "init",
