@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import zlib from 'zlib';
 import crypto from 'crypto';
+import path from 'path';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -10,6 +11,7 @@ enum Commands {
     CatFile = "cat-file",
     HashObject = "hash-object",
     LsTree = "ls-tree",
+    WriteTree = "write-tree",
 }
 
 function splitHash(hash: string): { dir: string; file: string } {
@@ -56,6 +58,35 @@ function writeObject(type: 'blob' | 'tree', body: Buffer): string {
     const compressed = zlib.deflateSync(storeData);
     fs.writeFileSync(`${dirPath}/${file}`, compressed);
     return hash;
+}
+
+function buildTree(dir: string): string {
+    const entries: { mode: string; name: string; hash: string }[] = [];
+    for (const dirent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const name = dirent.name;
+        if (name === '.git') continue;
+        const fullPath = path.join(dir, name);
+        if (dirent.isFile()) {
+            const data = fs.readFileSync(fullPath);
+            const blobHash = writeObject('blob', data);
+            entries.push({ mode: '100644', name, hash: blobHash });
+        } else if (dirent.isDirectory()) {
+            const subHash = buildTree(fullPath);
+            if (subHash) {
+                entries.push({ mode: '40000', name, hash: subHash });
+            }
+        }
+    }
+
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    const bodyBuffers: Buffer[] = [];
+    for (const e of entries) {
+        const meta = Buffer.from(`${e.mode} ${e.name}\x00`);
+        const shaRaw = Buffer.from(e.hash, 'hex');
+        bodyBuffers.push(Buffer.concat([meta, shaRaw]));
+    }
+    const body = Buffer.concat(bodyBuffers);
+    return writeObject('tree', body);
 }
 
 switch (command) {
@@ -134,6 +165,12 @@ switch (command) {
             offset = nullIdx2 + 21;
         }
         break;
+
+    case Commands.WriteTree: {
+        const treeHash = buildTree('.');
+        console.log(treeHash);
+        break;
+    }
 
     default:
         throw new Error(`Unknown command ${command}`);
