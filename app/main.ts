@@ -53,7 +53,7 @@ switch (command) {
             throw new Error("Missing or invalid -w argument");
         }
 
-        const filePath = args[wIndex + 1];
+        const filePath = args[wIndex - 1];
         const fileData = fs.readFileSync(filePath);
 
         const header = `blob ${fileData.length}\x00`;
