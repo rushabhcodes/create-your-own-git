@@ -1,37 +1,80 @@
 [![progress-banner](https://backend.codecrafters.io/progress/git/63fd1b62-cb46-4088-9050-e197afa2a069)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-This is a starting point for TypeScript solutions to the
+This repository is my TypeScript solution-in-progress for the
 ["Build Your Own Git" Challenge](https://codecrafters.io/challenges/git).
 
-In this challenge, you'll build a small Git implementation that's capable of
-initializing a repository, creating commits and cloning a public repository.
-Along the way we'll learn about the `.git` directory, Git objects (blobs,
-commits, trees etc.), Git's transfer protocols and more.
+Current implementation supports:
+
+* Initialize a repository (`init`)
+* Read a blob object (`cat-file -p <blob_sha>`)
+* Create (hash & store) a blob object (`hash-object -w <file>`)
+* Read (list) a tree object (`ls-tree <tree_sha>` / `--name-only`)
+* Write a tree object representing the working directory (`write-tree`)
+* Create a commit object (`commit-tree <tree_sha> -m <message>` with optional `-p <parent_sha>`)
+
+Not yet implemented:
+
+* Clone (Smart HTTP) – planned next.
+
+This is being built incrementally; each command writes/reads actual Git object
+files under `.git/objects` using proper headers + zlib compression.
 
 **Note**: If you're viewing this repo on GitHub, head over to
 [codecrafters.io](https://codecrafters.io) to try the challenge.
 
-# Passing the first stage
+# Usage examples
 
-The entry point for your Git implementation is in `app/main.ts`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+Initialize:
 
 ```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
+./your_program.sh init
 ```
 
-That's all!
+Create & store a blob (prints SHA):
 
-# Stage 2 & beyond
+```sh
+echo "hello" > hello.txt
+./your_program.sh hash-object -w hello.txt
+```
 
-Note: This section is for stages 2 and beyond.
+Show blob contents:
 
-1. Ensure you have `bun (1.2)` installed locally
-1. Run `./your_program.sh` to run your Git implementation, which is implemented
-   in `app/main.ts`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+```sh
+./your_program.sh cat-file -p <blob_sha>
+```
+
+Write working directory tree (prints tree SHA):
+
+```sh
+./your_program.sh write-tree
+```
+
+List a tree:
+
+```sh
+./your_program.sh ls-tree <tree_sha>
+./your_program.sh ls-tree --name-only <tree_sha>
+```
+
+Create a commit:
+
+```sh
+TREE=$(./your_program.sh write-tree)
+./your_program.sh commit-tree $TREE -m "Initial commit"
+```
+
+Create a commit with a parent:
+
+```sh
+NEW_TREE=$(./your_program.sh write-tree)
+./your_program.sh commit-tree $NEW_TREE -p <parent_commit_sha> -m "Second commit"
+```
+
+Inspect commit with real git (for comparison):
+
+```sh
+git cat-file -p <commit_sha>
+```
 
 # Testing locally
 
