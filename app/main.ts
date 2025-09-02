@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import zlib from 'zlib';
-import cryptop from 'crypto';
+import crypto from 'crypto';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -8,7 +8,7 @@ const command = args[0];
 enum Commands {
     Init = "init",
     CatFile = "cat-file",
-    HashObject = "hash-object"
+    HashObject = "hash-object",
 }
 
 switch (command) {
@@ -53,13 +53,13 @@ switch (command) {
             throw new Error("Missing or invalid -w argument");
         }
 
-        const filePath = args[wIndex - 1];
+        const filePath = args[wIndex + 1];
         const fileData = fs.readFileSync(filePath);
 
         const header = `blob ${fileData.length}\x00`;
         const storeData = Buffer.concat([Buffer.from(header), fileData]);
 
-        const hashBuffer = cryptop.createHash('sha1').update(storeData).digest();
+        const hashBuffer = crypto.createHash('sha1').update(storeData).digest();
         const hashHex = hashBuffer.toString('hex');
 
         const dirName = hashHex.slice(0, 2);
