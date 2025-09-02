@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import zlib from 'zlib';
+import cryptop from 'crypto';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -7,6 +8,7 @@ const command = args[0];
 enum Commands {
     Init = "init",
     CatFile = "cat-file",
+    HashObject = "hash-object"
 }
 
 switch (command) {
@@ -42,6 +44,36 @@ switch (command) {
         const new_data = data.slice(data.indexOf("\x00") + 1)
 
         process.stdout.write(new_data.toString());
+
+        break;
+
+    case Commands.HashObject:
+        const wIndex = args.indexOf("-w");
+        if (wIndex === -1 || wIndex + 1 >= args.length) {
+            throw new Error("Missing or invalid -w argument");
+        }
+
+        const filePath = args[wIndex + 1];
+        const fileData = fs.readFileSync(filePath);
+
+        const header = `blob ${fileData.length}\x00`;
+        const storeData = Buffer.concat([Buffer.from(header), fileData]);
+
+        const hashBuffer = cryptop.createHash('sha1').update(storeData).digest();
+        const hashHex = hashBuffer.toString('hex');
+
+        const dirName = hashHex.slice(0, 2);
+        const fileName = hashHex.slice(2);
+
+        const objectDir = `.git/objects/${dirName}`;
+        if (!fs.existsSync(objectDir)) {
+            fs.mkdirSync(objectDir);
+        }
+
+        const compressedStoreData = zlib.deflateSync(storeData);
+        fs.writeFileSync(`${objectDir}/${fileName}`, compressedStoreData);
+
+        console.log(hashHex);
 
         break;
 
