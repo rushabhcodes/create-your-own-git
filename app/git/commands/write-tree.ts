@@ -1,0 +1,82 @@
+import fs from "fs";
+import path from "path";
+import { createBlobFromFile } from "../utils/objects";
+import crypto from "crypto";
+import zlib from "zlib";
+
+export default class WriteTreeCommand {
+    constructor() { }
+
+    execute() {
+        // recursively traverse the working directory
+        // for each file, create a blob object and store it in .git/objects
+        // create a tree object that references all the blobs and subtrees
+        // store the tree object in .git/objects
+        // print the hash of the root tree object
+        function recursiveCreateTree(basePath: string): string | null {
+            const entries = fs.readdirSync(basePath);
+            const treeEntries = [];
+            for (const entry of entries) {
+                if (entry === '.git') continue; // skip .git directory
+                const fullPath = path.join(basePath, entry);
+                const stats = fs.statSync(fullPath);
+                if (stats.isDirectory()) {
+                    const shaHash = recursiveCreateTree(fullPath);
+                    treeEntries.push({
+                        mode: "40000",
+                        basename: path.basename(fullPath),
+                        shaHash,
+                    },);
+                } else if (stats.isFile()) {
+                    const shaHash = createBlobFromFile(fullPath);
+                    treeEntries.push({
+                        mode: "100644",
+                        basename: path.basename(fullPath),
+                        shaHash,
+                    },);
+                }
+
+            }
+
+            if (entries.length == 0 || treeEntries.length === 0) {
+                // empty tree
+                return null;
+            }
+
+            const treeBody = treeEntries.reduce((acc, treeEntry) => {
+                const { mode, basename, shaHash } = treeEntry;
+                if (!shaHash) return acc; // skip if shaHash is null
+                return Buffer.concat([acc,
+                    Buffer.from(`${mode} ${basename}\0`),
+                    Buffer.from(shaHash, 'hex',),
+                ],);
+            }, Buffer.alloc(0));
+
+            const tree = Buffer.concat([
+                Buffer.from(`tree ${treeBody.length}\0`),
+                treeBody,
+            ],);
+
+            const treeHash = crypto.createHash('sha1').update(tree).digest('hex');
+            console.log(treeHash);
+
+            const dir = treeHash.slice(0, 2);
+            const file = treeHash.slice(2);
+            const objectsDir = path.join(process.cwd(), '.git', 'objects', dir);
+            if (!fs.existsSync(objectsDir)) fs.mkdirSync(objectsDir, { recursive: true });
+            const objPath = path.join(objectsDir, file);
+            if (!fs.existsSync(objPath)) {
+                const compressed = zlib.deflateSync(tree);
+                fs.writeFileSync(objPath, compressed);
+            }
+
+            return treeHash;
+        }
+
+        const treeSha = recursiveCreateTree(process.cwd());
+
+        process.stdout.write(treeSha!);
+    }
+
+
+}

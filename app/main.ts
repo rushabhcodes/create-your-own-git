@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import path from 'path';
 
 import GitClient from './git/client';
-import { CatFileCommand, HashObjectCommand, InitCommand, LsTreeCommand } from './git/commands';
+import { CatFileCommand, HashObjectCommand, InitCommand, LsTreeCommand, WriteTreeCommand } from './git/commands';
 
 const gitClient = new GitClient;
 
@@ -38,44 +38,9 @@ switch (command) {
         handleLsTreeCommand();
         break;
 
-    //     const nameOnlyFlag = args.includes("--name-only");
-
-    //     let treeHash: string | undefined;
-    //     for (let i = 1; i < args.length; i++) {
-    //         const a = args[i];
-    //         if (!a.startsWith('-')) { treeHash = a; break; }
-    //     }
-
-    //     if (!treeHash) {
-    //         throw new Error("Missing tree hash argument");
-    //     }
-
-    //     const treeObj = readObject(treeHash);
-    //     const body = treeObj.body;
-    //     let offset = 0;
-    //     while (offset < body.length) {
-    //         const spaceIdx = body.indexOf(0x20, offset); // ' '
-    //         const nullIdx2 = body.indexOf(0x00, spaceIdx);
-    //         if (spaceIdx === -1 || nullIdx2 === -1) break; // malformed
-    //         let mode = body.slice(offset, spaceIdx).toString();
-    //         if (mode.length === 5) {
-    //             mode = '0' + mode;
-    //         }
-    //         const name = body.slice(spaceIdx + 1, nullIdx2).toString();
-    //         const shaBytes = body.slice(nullIdx2 + 1, nullIdx2 + 21); // 20 bytes
-    //         const sha = shaBytes.toString('hex');
-    //         if (nameOnlyFlag) {
-    //             console.log(name);
-    //         } else {
-    //             console.log(`${mode} ${sha}\t${name}`);
-    //         }
-    //         offset = nullIdx2 + 21;
-    //     }
-
-    // case Commands.WriteTree:
-    //     const treeHash = buildTree('.');
-    //     console.log(treeHash);
-    //     break;
+    case Commands.WriteTree:
+        handleWriteTreeCommand();
+        break;
 
 
     // case Commands.CommitTree: 
@@ -124,5 +89,10 @@ function handleHashObjectCommand() {
 
 function handleLsTreeCommand() {
     const command = new LsTreeCommand(args);
+    gitClient.run(command);
+}
+
+function handleWriteTreeCommand() {
+    const command = new WriteTreeCommand();
     gitClient.run(command);
 }

@@ -1,7 +1,5 @@
 import * as fs from 'fs';
-import * as path from 'path';
-import zlib from 'zlib';
-import crypto from 'crypto';
+import { createBlobFromFile } from '../utils/objects';
 
 export default class HashObjectCommand {
     private writeFlag: boolean = false;
@@ -44,26 +42,7 @@ export default class HashObjectCommand {
             return;
         }
         try {
-            path.join(process.cwd(), ".git", "objects",);
-            const data = fs.readFileSync(this.filePath);
-            const header = `blob ${data.length}\x00`;
-            const store = Buffer.concat([Buffer.from(header), data]);
-            const hash = crypto.createHash('sha1').update(store).digest('hex');
-
-            if (this.writeFlag) {
-                const dir = hash.slice(0, 2);
-                const file = hash.slice(2);
-                const objectsDir = path.join(process.cwd(), '.git', 'objects', dir);
-
-                if (!fs.existsSync(objectsDir)) fs.mkdirSync(objectsDir, { recursive: true });
-
-                const objectPath = path.join(objectsDir, file);
-                
-                if (!fs.existsSync(objectPath)) {
-                    const compressed = zlib.deflateSync(store);
-                    fs.writeFileSync(objectPath, compressed);
-                }
-            }
+            const hash = createBlobFromFile(this.filePath, this.writeFlag);
             console.log(hash);
             
         } catch (e: any) {
