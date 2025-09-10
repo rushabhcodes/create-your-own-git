@@ -1,10 +1,5 @@
-import * as fs from 'fs';
-import zlib from 'zlib';
-import crypto from 'crypto';
-import path from 'path';
-
 import GitClient from './git/client';
-import { CatFileCommand, HashObjectCommand, InitCommand, LsTreeCommand, WriteTreeCommand } from './git/commands';
+import { CatFileCommand, CommitTreeCommand, HashObjectCommand, InitCommand, LsTreeCommand, WriteTreeCommand } from './git/commands';
 
 const gitClient = new GitClient;
 
@@ -43,29 +38,9 @@ switch (command) {
         break;
 
 
-    // case Commands.CommitTree: 
-    //     if (args.length < 2) throw new Error("Missing tree SHA");
-    //     const treeSha = args[1];
-    //     const pIdx = args.indexOf('-p');
-    //     const parentSha = pIdx !== -1 && pIdx + 1 < args.length ? args[pIdx + 1] : undefined;
-    //     const mIdx = args.indexOf('-m');
-    //     if (mIdx === -1 || mIdx + 1 >= args.length) throw new Error("Missing -m <message>");
-    //     const message = args[mIdx + 1];
-    //     const authorName = 'Coder';
-    //     const authorEmail = 'coder@example.com';
-    //     const timestamp = Math.floor(Date.now() / 1000);
-    //     const timezone = '+0000';
-    //     let lines = [`tree ${treeSha}`];
-    //     if (parentSha) lines.push(`parent ${parentSha}`);
-    //     const ident = `${authorName} <${authorEmail}> ${timestamp} ${timezone}`;
-    //     lines.push(`author ${ident}`);
-    //     lines.push(`committer ${ident}`);
-    //     lines.push(''); // blank line before message
-    //     lines.push(message);
-    //     const body = Buffer.from(lines.join('\n') + '\n');
-    //     const commitHash = writeObject('commit', body);
-    //     console.log(commitHash);
-    //     break;
+    case Commands.CommitTree:
+        handleCommitTreeCommand();
+        break;
 
     default:
         throw new Error(`Unknown command ${command}`);
@@ -94,5 +69,10 @@ function handleLsTreeCommand() {
 
 function handleWriteTreeCommand() {
     const command = new WriteTreeCommand();
+    gitClient.run(command);
+}
+
+function handleCommitTreeCommand() {
+    const command = new CommitTreeCommand(args);
     gitClient.run(command);
 }

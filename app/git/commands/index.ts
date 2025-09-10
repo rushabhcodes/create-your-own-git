@@ -3,7 +3,7 @@ import HashObjectCommand from "./hash-object";
 import InitCommand from "./init";
 import LsTreeCommand from "./ls-tree";
 import WriteTreeCommand from "./write-tree";
-
+import CommitTreeCommand from "./commit-tree";
 
 
 export interface GitCommand {
@@ -12,4 +12,4 @@ export interface GitCommand {
 
 
 
-export { CatFileCommand, InitCommand, HashObjectCommand, LsTreeCommand, WriteTreeCommand } ;
+export { CatFileCommand, InitCommand, HashObjectCommand, LsTreeCommand, WriteTreeCommand, CommitTreeCommand } ;
