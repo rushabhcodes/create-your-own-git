@@ -6,9 +6,9 @@ export default class CatFileCommand {
     flag: string;
     objectHash: string;
 
-    constructor(flag: string, objectHash: string) {
-        this.flag = flag;
-        this.objectHash = objectHash;
+    constructor(args: string[]) {
+        this.flag = args[1];
+        this.objectHash = args[2];
     }
 
     execute() {
@@ -46,7 +46,8 @@ export default class CatFileCommand {
 
         try {
             const compressed = readFileSync(objectPath);
-            const data = zlib.unzipSync(compressed);
+            const data = zlib.deflateSync(compressed);
+            
             // Git object format:
 
             // <type> <size>\0<content>

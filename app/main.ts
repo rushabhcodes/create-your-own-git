@@ -4,14 +4,13 @@ import crypto from 'crypto';
 import path from 'path';
 
 import GitClient from './git/client';
-import { CatFileCommand, InitCommand } from './git/commands';
+import { CatFileCommand, HashObjectCommand, InitCommand, LsTreeCommand } from './git/commands';
 
 const gitClient = new GitClient;
 
 
 const args = process.argv.slice(2);
 const command = args[0];
-
 enum Commands {
     Init = "init",
     CatFile = "cat-file",
@@ -28,24 +27,16 @@ switch (command) {
         createGitDirectory()
         break;
     case Commands.CatFile:
-        handelCatFileCommand()
+        handleCatFileCommand()
         break;
 
-    // case Commands.HashObject:
+    case Commands.HashObject:
+        handleHashObjectCommand();
+        break;
 
-    //     const wIndex = args.indexOf("-w");
-    //     if (wIndex === -1 || wIndex + 1 >= args.length) {
-    //         throw new Error("Missing or invalid -w argument");
-    //     }
-
-    //     const filePath = args[wIndex + 1];
-    //     const fileData = fs.readFileSync(filePath);
-    //     const hashHex = writeObject('blob', fileData);
-    //     console.log(hashHex);
-
-    //     break;
-
-    // case Commands.LsTree:
+    case Commands.LsTree:
+        handleLsTreeCommand();
+        break;
 
     //     const nameOnlyFlag = args.includes("--name-only");
 
@@ -80,7 +71,6 @@ switch (command) {
     //         }
     //         offset = nullIdx2 + 21;
     //     }
-    //     break;
 
     // case Commands.WriteTree:
     //     const treeHash = buildTree('.');
@@ -116,172 +106,23 @@ switch (command) {
         throw new Error(`Unknown command ${command}`);
 }
 
-
-function splitHash(hash: string): { dir: string; file: string } {
-    return { dir: hash.slice(0, 2), file: hash.slice(2) };
-}
-
-function objectPath(hash: string): string {
-    const { dir, file } = splitHash(hash);
-    return `.git/objects/${dir}/${file}`;
-}
-
-interface GitObject {
-    type: string;
-    size: number;
-    body: Buffer;
-}
-
-function readRawObject(hash: string): Buffer {
-    return zlib.unzipSync(fs.readFileSync(objectPath(hash)));
-}
-
-function readObject(hash: string): GitObject {
-    const data = readRawObject(hash);
-    const nulIdx = data.indexOf(0x00);
-    if (nulIdx === -1) throw new Error("Corrupt object: missing header terminator");
-    const header = data.slice(0, nulIdx).toString(); // e.g. "blob 14"
-    const [type, sizeStr] = header.split(' ');
-    const size = parseInt(sizeStr, 10);
-    const body = data.slice(nulIdx + 1);
-    if (body.length !== size) {
-        // Not throwing hard (Git sometimes tolerates) but we'll enforce for consistency
-        throw new Error(`Size mismatch for ${hash}: expected ${size} got ${body.length}`);
-    }
-    return { type, size, body };
-}
-
-function writeObject(type: 'blob' | 'tree' | 'commit', body: Buffer): string {
-    const header = `${type} ${body.length}\x00`;
-    const storeData = Buffer.concat([Buffer.from(header), body]);
-    const hash = crypto.createHash('sha1').update(storeData).digest('hex');
-    const { dir, file } = splitHash(hash);
-    const dirPath = `.git/objects/${dir}`;
-    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-    const compressed = zlib.deflateSync(storeData);
-    fs.writeFileSync(`${dirPath}/${file}`, compressed);
-    return hash;
-}
-
-// --- Helpers for reading commit/tree structure and locating a file ---
-
-function parseCommit(commitHash: string): { tree: string } {
-    const obj = readObject(commitHash);
-    if (obj.type !== 'commit') throw new Error(`Object ${commitHash} is not a commit`);
-    const text = obj.body.toString('utf8');
-    const firstBlank = text.indexOf('\n\n');
-    const headerPart = firstBlank === -1 ? text : text.slice(0, firstBlank);
-    const lines = headerPart.split('\n');
-    for (const line of lines) {
-        if (line.startsWith('tree ')) {
-            return { tree: line.slice(5).trim() };
-        }
-    }
-    throw new Error(`Commit ${commitHash} missing tree`);
-}
-
-type TreeEntry = { mode: string; name: string; hash: string; isTree: boolean };
-
-function readTreeEntries(treeHash: string): TreeEntry[] {
-    const obj = readObject(treeHash);
-    if (obj.type !== 'tree') throw new Error(`Object ${treeHash} is not a tree`);
-    const body = obj.body;
-    const entries: TreeEntry[] = [];
-    let offset = 0;
-    while (offset < body.length) {
-        const spaceIdx = body.indexOf(0x20, offset); // ' '
-        const nullIdx = body.indexOf(0x00, spaceIdx);
-        if (spaceIdx === -1 || nullIdx === -1) break; // malformed
-        let mode = body.slice(offset, spaceIdx).toString();
-        if (mode.length === 5) mode = '0' + mode; // normalize e.g. 40000 -> 040000
-        const name = body.slice(spaceIdx + 1, nullIdx).toString();
-        const shaBytes = body.slice(nullIdx + 1, nullIdx + 21);
-        const hash = shaBytes.toString('hex');
-        const numericMode = parseInt(mode, 10);
-        const isTree = numericMode === 40000;
-        entries.push({ mode, name, hash, isTree });
-        offset = nullIdx + 21;
-    }
-    return entries;
-}
-
-function getBlobHashAtPathFromTree(rootTreeHash: string, filePath: string): string | null {
-    const normalized = path.posix.normalize(filePath).replace(/^\/+/, '');
-    if (normalized === '' || normalized === '.') return null; // points to root
-    const parts = normalized.split('/');
-    let currentTree = rootTreeHash;
-    for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        const entries = readTreeEntries(currentTree);
-        const entry = entries.find(e => e.name === part);
-        if (!entry) return null; // path component missing
-        const isLast = i === parts.length - 1;
-        if (isLast) {
-            // If it resolves to a directory, not a file, treat as missing
-            if (entry.isTree) return null;
-            return entry.hash;
-        } else {
-            if (!entry.isTree) return null; // expected dir but found file
-            currentTree = entry.hash; // descend
-        }
-    }
-    return null; // should not reach here
-}
-
-function getBlobHashAtPathFromCommit(commitHash: string, filePath: string): string | null {
-    const { tree } = parseCommit(commitHash);
-    return getBlobHashAtPathFromTree(tree, filePath);
-}
-
-export function hasFileChangedBetweenCommits(commitHashA: string, commitHashB: string, filePath: string): boolean {
-    const a = getBlobHashAtPathFromCommit(commitHashA, filePath);
-    const b = getBlobHashAtPathFromCommit(commitHashB, filePath);
-    // If the file is absent in both commits, consider it unchanged.
-    if (a === null && b === null) return false;
-    return a !== b;
-}
-
-function buildTree(dir: string): string {
-    const entries: { mode: string; name: string; hash: string }[] = [];
-    for (const dirent of fs.readdirSync(dir, { withFileTypes: true })) {
-        const name = dirent.name;
-        if (name === '.git') continue;
-        const fullPath = path.join(dir, name);
-        if (dirent.isFile()) {
-            const data = fs.readFileSync(fullPath);
-            const blobHash = writeObject('blob', data);
-            entries.push({ mode: '100644', name, hash: blobHash });
-        } else if (dirent.isDirectory()) {
-            const subHash = buildTree(fullPath);
-            if (subHash) {
-                entries.push({ mode: '40000', name, hash: subHash });
-            }
-        }
-    }
-
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    const bodyBuffers: Buffer[] = [];
-    for (const e of entries) {
-        const meta = Buffer.from(`${e.mode} ${e.name}\x00`);
-        const shaRaw = Buffer.from(e.hash, 'hex');
-        bodyBuffers.push(Buffer.concat([meta, shaRaw]));
-    }
-    const body = Buffer.concat(bodyBuffers);
-    return writeObject('tree', body);
-}
-
 function createGitDirectory() {
     const command = new InitCommand();
-    
     gitClient.run(command)
 }
 
 
-function handelCatFileCommand() {
-    const flag = args[1];
-    const commitSHA = args[2]
-
-    const command = new CatFileCommand(flag, commitSHA);
-
+function handleCatFileCommand() {
+    const command = new CatFileCommand(args);
     gitClient.run(command)
+}
+
+function handleHashObjectCommand() {
+    const command = new HashObjectCommand(args);
+    gitClient.run(command);
+}
+
+function handleLsTreeCommand() {
+    const command = new LsTreeCommand(args);
+    gitClient.run(command);
 }

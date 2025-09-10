@@ -1,6 +1,7 @@
 import CatFileCommand from "./cat-file";
+import HashObjectCommand from "./hash-object";
 import InitCommand from "./init";
-
+import LsTreeCommand from "./ls-tree";
 
 
 
@@ -10,4 +11,4 @@ export interface GitCommand {
 
 
 
-export {CatFileCommand, InitCommand};
+export { CatFileCommand, InitCommand, HashObjectCommand, LsTreeCommand };
