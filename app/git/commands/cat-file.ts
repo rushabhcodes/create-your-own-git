@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync } from "fs";
 import path from "path";
-import zlib from "zlib";
+import { readObject } from "../utils/objects";
 
 export default class CatFileCommand {
     flag: string;
@@ -45,38 +45,15 @@ export default class CatFileCommand {
         }
 
         try {
-            const compressed = readFileSync(objectPath);
-            const data = zlib.inflateSync(compressed);
-            
-            // Git object format:
-
-            // <type> <size>\0<content>
-
-            const nulIdx = data.indexOf(0x00);
-            if (nulIdx === -1) {
-                console.error(`fatal: corrupt object ${objectHash}`);
-                process.exitCode = 1;
-                return;
-            }
-
-            const header = data.slice(0, nulIdx).toString(); // e.g. "blob 14"
-            
-            const body = data.slice(nulIdx + 1);
-            
-            const [type, size] = header.split(' ');
-            // Only pretty-print blobs for now; mimic simplified behavior
-            if (type === 'blob') {
-                process.stdout.write(`${type} ${size}\n`);
-                process.stdout.write(body);
-
-            } else if (type === 'commit') {
-                process.stdout.write(`${type} ${size}\n`);
-                process.stdout.write(body.toString('utf8'));
-                
-            }
-            else if (type === 'tree') {
-                process.stdout.write(`${type} ${size}\n`);
-                
+            const obj = readObject(objectHash);
+            // -p should pretty-print the object body only
+            if (obj.type === 'blob') {
+                process.stdout.write(obj.body);
+            } else if (obj.type === 'commit') {
+                process.stdout.write(obj.body.toString('utf8'));
+            } else if (obj.type === 'tree') {
+                // Tree entries are in the format: "<mode> <type> <hash>\t<name>\n"
+                process.stdout.write(obj.body.toString('utf8'));
             }
         } catch (e: any) {
             console.error(`fatal: error reading object ${objectHash}: ${e.message || e}`);

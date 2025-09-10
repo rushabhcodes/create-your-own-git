@@ -1,6 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-import zlib from 'zlib';
+import { readObject, parseTreeEntries } from '../utils/objects';
 
 export default class LsTreeCommand {
     private flag: string;
@@ -33,15 +31,20 @@ export default class LsTreeCommand {
         const resolvedTreeHash = this.resolveTreeish(this.objectHash);
         if (!resolvedTreeHash) return; // error already printed
 
-        const treeObj = this.readObject(resolvedTreeHash);
+    const treeObj = readObject(resolvedTreeHash);
         if (!treeObj) return; // error printed
         if (treeObj.type !== 'tree') {
             console.error(`fatal: object ${resolvedTreeHash} is not a tree`);
             process.exitCode = 1; return;
         }
 
-        const entries = this.parseTreeEntries(treeObj.body, resolvedTreeHash);
-        if (!entries) return; // error printed
+        let entries;
+        try {
+            entries = parseTreeEntries(treeObj.body);
+        } catch (e: any) {
+            console.error(`fatal: corrupt tree ${resolvedTreeHash} (${e.message || e})`);
+            process.exitCode = 1; return;
+        }
 
         const nameOnly = this.flag === '--name-only';
         for (const e of entries) {
@@ -55,38 +58,8 @@ export default class LsTreeCommand {
 
     // --- Helpers ---
 
-
-    private readObject(hash: string): { type: string; size: number; body: Buffer } | null {
-        const p = path.join(process.cwd(), '.git', 'objects', hash.slice(0,2), hash.slice(2));
-        if (!fs.existsSync(p)) {
-            console.error(`fatal: Not a valid object name ${hash}`);
-            process.exitCode = 1; return null;
-        }
-        try {
-            const compressed = fs.readFileSync(p);
-            const buf = zlib.inflateSync(compressed);
-            const nulIdx = buf.indexOf(0x00);
-            if (nulIdx === -1) {
-                this.corrupt(hash, 'no header'); return null;
-            }
-            const header = buf.slice(0, nulIdx).toString('utf8');
-            const [type, sizeStr] = header.split(' ');
-            const size = parseInt(sizeStr, 10);
-            const body = buf.slice(nulIdx + 1);
-            
-            if (body.length !== size) {
-                this.corrupt(hash, 'size mismatch'); return null;
-            }
-            return { type, size, body };
-
-        } catch (e: any) {
-            console.error(`fatal: error reading object ${hash}: ${e.message || e}`);
-            process.exitCode = 1; return null;
-        }
-    }
-
     private resolveTreeish(hash: string): string | null {
-        const obj = this.readObject(hash);
+    const obj = readObject(hash);
         if (!obj) return null;
         if (obj.type === 'tree') return hash;
         if (obj.type === 'commit') {
@@ -105,39 +78,7 @@ export default class LsTreeCommand {
         process.exitCode = 1; return null;
     }
 
-    private parseTreeEntries(body: Buffer, treeHash: string): Array<{mode:string; type:string; hash:string; name:string}> | null {
-        const entries: Array<{mode:string; type:string; hash:string; name:string}> = [];
-        let offset = 0;
-
-        // Each entry: <mode> <name>\0<20-byte SHA-1>
-
-        while (offset < body.length) {
-            // mode ends at the first space (0x20)
-            const spaceIdx = body.indexOf(0x20, offset);
-            if (spaceIdx === -1) { this.corrupt(treeHash, 'unterminated mode'); return null; }
-            let mode = body.slice(offset, spaceIdx).toString('utf8');
-            mode = mode.padStart(6, "0"); // normalize e.g. 40000 -> 040000
-
-            // name ends at the next NUL (0x00)
-            const nullIdx = body.indexOf(0x00, spaceIdx + 1);
-            if (nullIdx === -1) { this.corrupt(treeHash, 'unterminated name'); return null; }
-            const name = body.slice(spaceIdx + 1, nullIdx).toString('utf8');
-
-            // next 20 bytes are the raw SHA-1
-            const shaStart = nullIdx + 1;
-            const shaEnd = shaStart + 20;
-            if (shaEnd > body.length) { this.corrupt(treeHash, 'truncated sha1'); return null; }
-            const hash = body.slice(shaStart, shaEnd).toString('hex');
-
-            const entryType = mode.startsWith('04') ? 'tree' : 'blob';
-
-            entries.push({ mode, type: entryType, hash, name });
-
-            offset = shaEnd;
-        }
-
-        return entries;
-    }
+    // removed: local parseTreeEntries (now centralized in utils)
 
     private corrupt(treeHash: string, reason: string) {
         console.error(`fatal: corrupt tree ${treeHash} (${reason})`);

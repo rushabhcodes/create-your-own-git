@@ -59,7 +59,6 @@ export default class WriteTreeCommand {
             ],);
 
             const treeHash = crypto.createHash('sha1').update(treeBuffer).digest('hex');
-            console.log(treeHash);
 
             createObjectFromHash(treeHash, treeBuffer);
 

@@ -1,5 +1,5 @@
 import GitClient from './git/client';
-import { CatFileCommand, CommitTreeCommand, HashObjectCommand, InitCommand, LsTreeCommand, WriteTreeCommand } from './git/commands';
+import { CatFileCommand, CommitTreeCommand, CompareCommitCommand, HashObjectCommand, InitCommand, LsTreeCommand, WriteTreeCommand } from './git/commands';
 
 const gitClient = new GitClient;
 
@@ -74,5 +74,10 @@ function handleWriteTreeCommand() {
 
 function handleCommitTreeCommand() {
     const command = new CommitTreeCommand(args);
+    gitClient.run(command);
+}
+
+function handleCompareCommitCommand() { 
+    const command = new CompareCommitCommand(args);
     gitClient.run(command);
 }

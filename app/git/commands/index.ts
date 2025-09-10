@@ -4,6 +4,7 @@ import InitCommand from "./init";
 import LsTreeCommand from "./ls-tree";
 import WriteTreeCommand from "./write-tree";
 import CommitTreeCommand from "./commit-tree";
+import CompareCommitCommand from "./compare-commit";
 
 
 export interface GitCommand {
@@ -12,4 +13,4 @@ export interface GitCommand {
 
 
 
-export { CatFileCommand, InitCommand, HashObjectCommand, LsTreeCommand, WriteTreeCommand, CommitTreeCommand } ;
+export { CatFileCommand, InitCommand, HashObjectCommand, LsTreeCommand, WriteTreeCommand, CommitTreeCommand, CompareCommitCommand } ;
