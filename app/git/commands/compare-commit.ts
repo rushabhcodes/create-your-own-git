@@ -87,5 +87,15 @@ export default class CompareCommitCommand {
         const content2 = getFileContentFromCommit(this.commitHash2, this.filePath);
         
         if (content1 === null || content2 === null) return; // errors already reported
+
+        if (content1 === content2) {
+            console.log(`File '${this.filePath}' is identical in both commits.`);
+        } else {
+            console.log(`File '${this.filePath}' differs between commits.`);
+            console.log(`--- Commit ${this.commitHash1}`);
+            console.log(content1);
+            console.log(`--- Commit ${this.commitHash2}`);
+            console.log(content2);
+        }
     }
 }

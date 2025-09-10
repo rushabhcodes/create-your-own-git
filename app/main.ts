@@ -13,6 +13,7 @@ enum Commands {
     LsTree = "ls-tree",
     WriteTree = "write-tree",
     CommitTree = "commit-tree",
+    CompareCommit = "compare-commit",
 }
 
 
@@ -40,6 +41,10 @@ switch (command) {
 
     case Commands.CommitTree:
         handleCommitTreeCommand();
+        break;
+
+    case Commands.CompareCommit:
+        handleCompareCommitCommand();
         break;
 
     default:
