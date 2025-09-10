@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import zlib from 'zlib';
+import { createObjectFromHash } from '../utils/objects';
 
 export default class CommitTreeCommand {
     commitTreeHash: string = '';
@@ -29,15 +30,7 @@ export default class CommitTreeCommand {
         
         const hash = crypto.createHash('sha1').update(fullCommit).digest('hex');
 
-        const dir = hash.slice(0, 2);
-        const file = hash.slice(2);
-        const objectDir = `.git/objects/${dir}`;
-        if (!fs.existsSync(objectDir)) fs.mkdirSync(objectDir, { recursive: true });
-        const objectPath = `${objectDir}/${file}`;
-        if (!fs.existsSync(objectPath)) {
-            const compressed = zlib.deflateSync(fullCommit);
-            fs.writeFileSync(objectPath, compressed);
-        }
+        createObjectFromHash(hash, fullCommit);
 
         process.stdout.write(hash);
 

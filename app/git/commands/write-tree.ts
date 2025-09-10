@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { createBlobFromFile } from "../utils/objects";
+import { createBlobFromFile, createObjectFromHash } from "../utils/objects";
 import crypto from "crypto";
 import zlib from "zlib";
+import { create } from "domain";
 
 export default class WriteTreeCommand {
     constructor() { }
@@ -52,23 +53,15 @@ export default class WriteTreeCommand {
                 ],);
             }, Buffer.alloc(0));
 
-            const tree = Buffer.concat([
+            const treeBuffer = Buffer.concat([
                 Buffer.from(`tree ${treeBody.length}\0`),
                 treeBody,
             ],);
 
-            const treeHash = crypto.createHash('sha1').update(tree).digest('hex');
+            const treeHash = crypto.createHash('sha1').update(treeBuffer).digest('hex');
             console.log(treeHash);
 
-            const dir = treeHash.slice(0, 2);
-            const file = treeHash.slice(2);
-            const objectsDir = path.join(process.cwd(), '.git', 'objects', dir);
-            if (!fs.existsSync(objectsDir)) fs.mkdirSync(objectsDir, { recursive: true });
-            const objPath = path.join(objectsDir, file);
-            if (!fs.existsSync(objPath)) {
-                const compressed = zlib.deflateSync(tree);
-                fs.writeFileSync(objPath, compressed);
-            }
+            createObjectFromHash(treeHash, treeBuffer);
 
             return treeHash;
         }
