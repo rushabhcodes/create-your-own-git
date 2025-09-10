@@ -24,7 +24,7 @@ export default class WriteTreeCommand {
                 if (stats.isDirectory()) {
                     const shaHash = recursiveCreateTree(fullPath);
                     treeEntries.push({
-                        mode: "40000",
+                        mode: "040000",
                         basename: path.basename(fullPath),
                         shaHash,
                     },);

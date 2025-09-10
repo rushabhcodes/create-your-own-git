@@ -46,7 +46,7 @@ export default class CatFileCommand {
 
         try {
             const compressed = readFileSync(objectPath);
-            const data = zlib.deflateSync(compressed);
+            const data = zlib.inflateSync(compressed);
             
             // Git object format:
 
@@ -63,13 +63,20 @@ export default class CatFileCommand {
             
             const body = data.slice(nulIdx + 1);
             
-            const [type] = header.split(' ');
+            const [type, size] = header.split(' ');
             // Only pretty-print blobs for now; mimic simplified behavior
             if (type === 'blob') {
+                process.stdout.write(`${type} ${size}\n`);
                 process.stdout.write(body);
-            } else {
-                // For tree/commit objects, print raw body (simplified)
+
+            } else if (type === 'commit') {
+                process.stdout.write(`${type} ${size}\n`);
                 process.stdout.write(body.toString('utf8'));
+                
+            }
+            else if (type === 'tree') {
+                process.stdout.write(`${type} ${size}\n`);
+                
             }
         } catch (e: any) {
             console.error(`fatal: error reading object ${objectHash}: ${e.message || e}`);
